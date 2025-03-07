@@ -7,12 +7,12 @@ import datetime
 import threading
 import time
 import json
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, # type: ignore
                            QLabel, QGridLayout, QFrame, QStyle, QMenu, QAction,
                            QDialog, QPushButton, QSlider, QSpinBox, QDialogButtonBox, QGroupBox, QMessageBox,
                            QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit, QComboBox)
-from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QTimer, QSettings, QDateTime, pyqtSignal
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QCursor, QPolygon, QTextCursor
+from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QTimer, QSettings, QDateTime, pyqtSignal # type: ignore
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QCursor, QPolygon, QTextCursor # type: ignore
 
 class NodeCountBadge(QLabel):
     def __init__(self, count, parent=None):
