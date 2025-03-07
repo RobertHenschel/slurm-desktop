@@ -80,6 +80,7 @@ class TimeSelectionDialog(QDialog):
         self.max_hours = self.get_max_walltime(partition_name)
         self.max_cpus = self.get_max_cpus_per_node(partition_name)
         self.max_memory = self.get_max_memory_per_node(partition_name)
+        self.gpu_info = self.get_gpu_info(partition_name)
         
         # Determine granularity based on max walltime
         self.use_minutes = self.max_hours <= 4
@@ -258,6 +259,51 @@ class TimeSelectionDialog(QDialog):
         memory_layout.addWidget(max_memory_label)
         
         layout.addWidget(memory_group)
+
+        # Add GPU selection widgets if GPUs are available
+        if self.gpu_info:
+            gpu_group = QGroupBox("GPU Resources")
+            gpu_layout = QVBoxLayout(gpu_group)
+            
+            # GPU type info
+            gpu_type_label = QLabel(f"GPU Type: {self.gpu_info['type']}")
+            gpu_layout.addWidget(gpu_type_label)
+            
+            # GPU count slider
+            gpu_slider_layout = QHBoxLayout()
+            gpu_label = QLabel("Number of GPUs:")
+            self.gpu_slider = QSlider(Qt.Horizontal)
+            self.gpu_slider.setMinimum(1)
+            self.gpu_slider.setMaximum(self.gpu_info['count'])
+            self.gpu_slider.setValue(1)  # Default to 1 GPU
+            self.gpu_slider.setTickPosition(QSlider.TicksBelow)
+            self.gpu_slider.setTickInterval(1)
+            
+            gpu_slider_layout.addWidget(gpu_label)
+            gpu_slider_layout.addWidget(self.gpu_slider)
+            gpu_layout.addLayout(gpu_slider_layout)
+            
+            # GPU spinbox
+            gpu_spinbox_layout = QHBoxLayout()
+            self.gpu_spinbox = QSpinBox()
+            self.gpu_spinbox.setMinimum(1)
+            self.gpu_spinbox.setMaximum(self.gpu_info['count'])
+            self.gpu_spinbox.setValue(1)  # Default to 1 GPU
+            
+            gpu_spinbox_layout.addWidget(self.gpu_spinbox)
+            gpu_spinbox_layout.addWidget(QLabel("GPUs"))
+            gpu_spinbox_layout.addStretch()
+            gpu_layout.addLayout(gpu_spinbox_layout)
+            
+            # Connect GPU slider and spinbox
+            self.gpu_slider.valueChanged.connect(self.gpu_spinbox.setValue)
+            self.gpu_spinbox.valueChanged.connect(self.gpu_slider.setValue)
+            
+            # Add max GPU info
+            max_gpu_label = QLabel(f"Maximum GPUs per node: {self.gpu_info['count']}")
+            gpu_layout.addWidget(max_gpu_label)
+            
+            layout.addWidget(gpu_group)
         
         # Add buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -443,6 +489,40 @@ class TimeSelectionDialog(QDialog):
     
     def get_selected_memory(self):
         return self.memory_spinbox.value()
+
+    def get_gpu_info(self, partition_name):
+        """Get GPU information for the partition."""
+        try:
+            # Get GRES (Generic Resource) info for the partition
+            result = subprocess.run(
+                ['sinfo', '-p', partition_name, '--format=%G', '-h'],
+                capture_output=True, text=True
+            )
+            gres_info = result.stdout.strip()
+            
+            # Check if there are GPUs
+            if gres_info == '(null)' or not gres_info:
+                return None
+            
+            # Parse GPU information (format: gpu:type:count)
+            gpu_match = re.match(r'gpu:([^:]+):(\d+)', gres_info)
+            if gpu_match:
+                return {
+                    'type': gpu_match.group(1).upper(),  # e.g., 'V100', 'H100'
+                    'count': int(gpu_match.group(2))
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error getting GPU information: {e}")
+            return None
+
+    def get_selected_gpus(self):
+        """Get the number of GPUs selected by the user."""
+        if hasattr(self, 'gpu_spinbox'):
+            return self.gpu_spinbox.value()
+        return None
 
 class FileViewerWindow(QMainWindow):
     """Window for viewing job output/error files with tail -f functionality."""
@@ -1264,7 +1344,7 @@ class PartitionIcon(QFrame):
         menu = QMenu(self)
         
         # Add the standard actions
-        job_action = menu.addAction("Submit Job")
+        job_action = menu.addAction("Run Interactive Job")
         job_action.triggered.connect(self.show_job_dialog)
         
         history_action = menu.addAction("Show Job History")
@@ -1407,13 +1487,24 @@ class PartitionIcon(QFrame):
     def show_job_dialog(self):
         dialog = TimeSelectionDialog(self.partition_name, self)
         if dialog.exec_() == QDialog.Accepted:
-            self.start_interactive_job(dialog.get_selected_time(), dialog.get_selected_cpus(), dialog.get_selected_memory())
+            self.start_interactive_job(
+                dialog.get_selected_time(),
+                dialog.get_selected_cpus(),
+                dialog.get_selected_memory(),
+                dialog.get_selected_gpus()
+            )
     
-    def start_interactive_job(self, time_limit="4:00:00", cpus_per_task=8, memory=32):
+    def start_interactive_job(self, time_limit="4:00:00", cpus_per_task=8, memory=32, gpus=None):
         # Construct the srun command
         command = (f"srun -p {self.partition_name} -N 1 -A staff --cpus-per-task={cpus_per_task} "
-                  f"--mem={memory}G --time={time_limit} --job-name=RED_Interactive_{self.partition_name} "
-                  f"--x11 --pty bash")
+                  f"--mem={memory}G --time={time_limit} --job-name=RED_Interactive_{self.partition_name} ")
+        
+        # Add GPU settings if requested
+        if gpus:
+            command += f"--gres=gpu:{gpus} "
+        
+        # Add terminal settings
+        command += "--x11 --pty bash"
         
         # Launch mate-terminal with the command
         try:
