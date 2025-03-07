@@ -1,6 +1,10 @@
 # slurm-desktop
 Linux desktop application to interface with SLURM
 
+<img src="https://github.com/user-attachments/assets/197aa9ca-26ab-46c9-99c6-f1e3469f2efb" alt="My image" width="400" />
+<img src="https://github.com/user-attachments/assets/130006ff-5a5f-4ce7-ac14-cc1e50c3a356" alt="My image" width="200" />
+
+
 # menu_parser.py
 - This is not general purpose. It currently only works on IU's RED system.
 
