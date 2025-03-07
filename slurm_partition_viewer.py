@@ -2218,6 +2218,29 @@ class MainWindow(QMainWindow):
         self.grid_layout.setSpacing(20)
         self.grid_layout.setContentsMargins(20, 20, 20, 20)
         
+        # Add help button
+        help_button = QPushButton(self)
+        help_button.setFixedSize(32, 32)
+        help_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                border-radius: 16px;
+                color: white;
+                font-weight: bold;
+                font-size: 16px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        help_button.setText("?")
+        help_button.clicked.connect(self.show_help)
+        help_button.setToolTip("Click for help documentation")
+        
+        # Position the help button at the lower right
+        help_button.move(self.width() - 52, self.height() - 52)  # 20px from right, 20px from bottom + button height
+        
         # Dictionary to store partition icons
         self.partition_icons = {}
         
@@ -2234,6 +2257,23 @@ class MainWindow(QMainWindow):
         
         # Initial job status update
         QTimer.singleShot(1000, self.update_job_statuses)
+        
+        # Update help button position when window is resized
+        self.help_button = help_button
+    
+    def resizeEvent(self, event):
+        """Handle window resize to keep help button in position."""
+        super().resizeEvent(event)
+        # Update help button position to stay in lower right corner
+        self.help_button.move(self.width() - 52, self.height() - 52)
+    
+    def show_help(self):
+        """Open help documentation in Firefox."""
+        try:
+            subprocess.Popen(['firefox', 'https://servicenow.iu.edu/kb?id=kb_article_view&sysparm_article=KB0023298'])
+        except Exception as e:
+            print(f"Error opening help documentation: {e}")
+            QMessageBox.warning(self, "Error", "Could not open help documentation. Please check if Firefox is installed.")
     
     def closeEvent(self, event):
         # Save window geometry before closing
