@@ -1083,12 +1083,12 @@ class PartitionIcon(QFrame):
         # Prevent focus border
         self.icon_label.setFocusPolicy(Qt.NoFocus)
         
-        # Use folder icon
-        folder_icon = QIcon.fromTheme("folder")
-        if not folder_icon.isNull():
-            pixmap = folder_icon.pixmap(QSize(64, 64))
+        # Use queue icon
+        queue_icon = QIcon("queue.png")
+        if not queue_icon.isNull():
+            pixmap = queue_icon.pixmap(QSize(40, 40))
         else:
-            # Fallback to a built-in style icon if theme icon is not available
+            # Fallback to a built-in style icon if queue.png is not available
             folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
             pixmap = folder_icon.pixmap(QSize(64, 64))
         
