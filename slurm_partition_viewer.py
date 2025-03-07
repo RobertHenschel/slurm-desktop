@@ -2238,8 +2238,31 @@ class MainWindow(QMainWindow):
         help_button.clicked.connect(self.show_help)
         help_button.setToolTip("Click for help documentation")
         
+        # Add user button
+        user_button = QPushButton(self)
+        user_button.setFixedSize(32, 32)
+        user_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+                border-radius: 16px;
+            }
+        """)
+        # Set the user icon
+        user_icon = QIcon("user.png")
+        user_button.setIcon(user_icon)
+        user_button.setIconSize(QSize(32, 32))
+        user_button.setToolTip("User Profile")
+        user_button.clicked.connect(self.show_user_stats)  # Add click handler
+        
         # Position the help button at the lower right
         help_button.move(self.width() - 52, self.height() - 52)  # 20px from right, 20px from bottom + button height
+        
+        # Position the user button at the top right
+        user_button.move(self.width() - 42, 10)  # 10px from right, 10px from top
         
         # Dictionary to store partition icons
         self.partition_icons = {}
@@ -2258,14 +2281,17 @@ class MainWindow(QMainWindow):
         # Initial job status update
         QTimer.singleShot(1000, self.update_job_statuses)
         
-        # Update help button position when window is resized
+        # Store button references for resize handling
         self.help_button = help_button
+        self.user_button = user_button
     
     def resizeEvent(self, event):
-        """Handle window resize to keep help button in position."""
+        """Handle window resize to keep buttons in position."""
         super().resizeEvent(event)
         # Update help button position to stay in lower right corner
         self.help_button.move(self.width() - 52, self.height() - 52)
+        # Update user button position to stay in top right corner
+        self.user_button.move(self.width() - 42, 10)
     
     def show_help(self):
         """Open help documentation in Firefox."""
@@ -2391,6 +2417,155 @@ class MainWindow(QMainWindow):
                 # 20% chance of having a job in this partition
                 has_jobs = random.random() < 0.2
                 icon.update_job_status(has_jobs)
+    
+    def show_user_stats(self):
+        """Show the user statistics window."""
+        stats_window = UserStatsWindow(self)
+        stats_window.exec_()
+
+class UserStatsWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("User SLURM Statistics")
+        self.setMinimumWidth(500)
+        
+        # Create layout
+        layout = QVBoxLayout(self)
+        
+        # Add header
+        header_label = QLabel("Your SLURM Usage Statistics (Last 30 Days)")
+        header_label.setAlignment(Qt.AlignCenter)
+        font = header_label.font()
+        font.setBold(True)
+        header_label.setFont(font)
+        layout.addWidget(header_label)
+        
+        # Create stats text area
+        self.stats_text = QTextEdit()
+        self.stats_text.setReadOnly(True)
+        layout.addWidget(self.stats_text)
+        
+        # Add OK button
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
+        
+        # Load and display stats
+        self.load_stats()
+    
+    def load_stats(self):
+        try:
+            # Get current username
+            username = os.environ.get('USER') or os.environ.get('USERNAME')
+            if not username:
+                try:
+                    import pwd
+                    username = pwd.getpwuid(os.getuid()).pw_name
+                except (ImportError, AttributeError):
+                    self.stats_text.setText("Error: Could not determine username")
+                    return
+            
+            # Calculate date 30 days ago
+            thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+            start_date = thirty_days_ago.strftime("%Y-%m-%d")
+            
+            # Run sacct command to get detailed job history including account information
+            result = subprocess.run([
+                'sacct',
+                '-u', username,
+                '-S', start_date,
+                '--format=JobID,Partition,State,Start,End,Elapsed,AllocCPUS,ReqMem,MaxRSS,Account',
+                '-P',  # Parsable output
+                '--noheader'  # No header in output
+            ], capture_output=True, text=True)
+            
+            # Process the output
+            jobs = []
+            total_cpu_hours = 0
+            total_jobs = 0
+            completed_jobs = 0
+            failed_jobs = 0
+            gpu_jobs = 0
+            partition_usage = {}
+            account_cpu_hours = {}  # Track CPU hours by account
+            
+            for line in result.stdout.strip().split('\n'):
+                if line and not line.isspace():
+                    fields = line.split('|')
+                    if not fields[0].endswith('.batch') and not fields[0].endswith('.extern'):
+                        # Count jobs by state
+                        state = fields[2].upper()
+                        if state == 'COMPLETED':
+                            completed_jobs += 1
+                        elif state in ['FAILED', 'TIMEOUT', 'CANCELLED', 'NODE_FAIL']:
+                            failed_jobs += 1
+                        
+                        # Track partition usage
+                        partition = fields[1]
+                        partition_usage[partition] = partition_usage.get(partition, 0) + 1
+                        
+                        # Get account name (last field)
+                        account = fields[9] if len(fields) > 9 else 'unknown'
+                        
+                        # Calculate CPU hours if job is completed
+                        if state == 'COMPLETED' and fields[5]:  # Elapsed time field
+                            try:
+                                # Parse elapsed time (format: [DD-]HH:MM:SS)
+                                elapsed = fields[5]
+                                hours = 0
+                                if '-' in elapsed:
+                                    days, time_part = elapsed.split('-')
+                                    hours += int(days) * 24
+                                    elapsed = time_part
+                                
+                                time_parts = elapsed.split(':')
+                                if len(time_parts) >= 3:
+                                    hours += int(time_parts[0])
+                                    hours += int(time_parts[1]) / 60
+                                
+                                # Multiply by allocated CPUs
+                                if fields[6]:  # AllocCPUS field
+                                    cpu_hours = hours * int(fields[6])
+                                    total_cpu_hours += cpu_hours
+                                    # Add to account-specific CPU hours
+                                    account_cpu_hours[account] = account_cpu_hours.get(account, 0) + cpu_hours
+                            except ValueError:
+                                pass
+                        
+                        # Check if it's a GPU job (based on partition name)
+                        if 'gpu' in partition.lower():
+                            gpu_jobs += 1
+                        
+                        total_jobs += 1
+            
+            # Format the statistics
+            stats_text = f"""User: {username}
+Period: {start_date} to Present
+
+Total Jobs: {total_jobs}
+├─ Completed: {completed_jobs}
+└─ Failed/Cancelled: {failed_jobs}
+
+Total CPU Hours: {total_cpu_hours:.1f}
+GPU Jobs: {gpu_jobs}
+
+Partition Usage:"""
+            
+            for partition, count in sorted(partition_usage.items()):
+                percentage = (count / total_jobs) * 100 if total_jobs > 0 else 0
+                stats_text += f"\n├─ {partition}: {count} jobs ({percentage:.1f}%)"
+            
+            # Add CPU hours by account
+            stats_text += "\n\nCPU Hours by Account:"
+            for account, cpu_hours in sorted(account_cpu_hours.items()):
+                percentage = (cpu_hours / total_cpu_hours) * 100 if total_cpu_hours > 0 else 0
+                stats_text += f"\n├─ {account}: {cpu_hours:.1f} hours ({percentage:.1f}%)"
+            
+            # Display the statistics
+            self.stats_text.setText(stats_text)
+            
+        except Exception as e:
+            self.stats_text.setText(f"Error loading statistics: {str(e)}")
 
 def main():
     app = QApplication(sys.argv)
