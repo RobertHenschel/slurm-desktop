@@ -1367,13 +1367,34 @@ class PartitionIcon(QFrame):
                 for directory_name, apps in menu_structure.items():
                     bash_apps = []
                     
-                    # Filter for applications with Exec starting with "bash -i "
+                    # Filter for applications with Exec starting with "bash -i " or "mate-terminal -e"
                     for app in apps:
                         app_name = app.get("name", "Unknown")
                         app_exec = app.get("exec", "")
                         
+                        # Process bash -i commands directly
                         if app_exec and app_exec.startswith("bash -i "):
                             bash_apps.append(app)
+                        
+                        # Process mate-terminal commands and extract the bash part
+                        elif app_exec and app_exec.startswith("mate-terminal -e "):
+                            # Extract the command inside the quotes
+                            match = re.search(r'mate-terminal -e\s+"([^"]+)"', app_exec)
+                            if match:
+                                bash_cmd = match.group(1)
+                                # Only include if it contains a bash command
+                                if "bash -i " in bash_cmd:
+                                    # Create a copy of the app with the modified exec command
+                                    modified_app = app.copy()
+                                    modified_app["exec"] = bash_cmd
+                                    bash_apps.append(modified_app)
+                        
+                        # Include shell scripts from the RED bin directory
+                        elif app_exec and app_exec.startswith("/N/soft/rhel8/red/bin/") and app_exec.endswith(".sh"):
+                            # Create a copy of the app with a modified exec command that uses bash -i
+                            modified_app = app.copy()
+                            modified_app["exec"] = f"bash -i {app_exec}"
+                            bash_apps.append(modified_app)
                     
                     # Only create a submenu if there are bash scripts in this directory
                     if bash_apps:
@@ -1432,11 +1453,6 @@ class PartitionIcon(QFrame):
             # Remove any field codes like %u, %f, etc.
             command = re.sub(r'%[a-zA-Z]', '', command).strip()
             
-            # Set default job parameters
-            time_limit = "0:15:00"  # 15 minutes
-            cpus_per_task = 2
-            memory = "32G"
-            
             # Get the partition name - the text is stored in a label inside the PartitionIcon
             # Find the label that contains the partition name
             partition_name = None
@@ -1451,36 +1467,45 @@ class PartitionIcon(QFrame):
                 if not partition_name:
                     raise ValueError("Could not determine partition name")
             
-            # Construct the srun command
-            srun_cmd = [
-                "srun",
-                "--partition=" + partition_name,
-                "--time=" + time_limit,
-                "--cpus-per-task=" + str(cpus_per_task),
-                "--mem=" + memory,
-                "--nodes=1",
-                "--account=STAFF",
-                "--x11",
-                "--pty",
-            ]
+            # Show the time selection dialog to let the user choose resources
+            dialog = TimeSelectionDialog(self.partition_name, self)
             
-            # Add the application command
-            full_cmd = srun_cmd + command.split()
+            # Set the window title to indicate we're launching an application
+            app_name = command.split('/')[-1] if '/' in command else command
+            dialog.setWindowTitle(f"Launch {app_name} - {self.partition_name}")
             
-            # Print the full command to the console
-            print("Executing command:", " ".join(full_cmd))
-            
-            # Show a message to the user
-            QMessageBox.information(
-                self,
-                "Launching Application",
-                f"Launching application in partition {partition_name}:\n\n{command}\n\nWith parameters:\n"
-                f"Time: {time_limit}\nCPUs: {cpus_per_task}\nMemory: {memory}"
-            )
-            
-            # Execute the command in a new process
-            subprocess.Popen(full_cmd)
-            
+            if dialog.exec_() == QDialog.Accepted:
+                # Get the selected resources
+                time_limit = dialog.get_selected_time()
+                cpus_per_task = dialog.get_selected_cpus()
+                memory = dialog.get_selected_memory()
+                gpus = dialog.get_selected_gpus()
+                
+                # Construct the srun command
+                srun_cmd = [
+                    "srun",
+                    "--partition=" + self.partition_name,
+                    "--time=" + time_limit,
+                    "--cpus-per-task=" + str(cpus_per_task),
+                    "--mem=" + str(memory) + "G",
+                    "--nodes=1",
+                    "--account=staff",
+                    "--x11",
+                    "--pty",
+                ]
+                
+                # Add GPU settings if requested
+                if gpus:
+                    srun_cmd.append(f"--gres=gpu:{gpus}")
+                
+                # Add the application command
+                full_cmd = srun_cmd + command.split()
+                
+                # Print the full command to the console
+                print("Executing command:", " ".join(full_cmd))
+                
+                # Execute the command in a new process
+                subprocess.Popen(full_cmd)
         except Exception as e:
             QMessageBox.warning(self, "Launch Error", f"Failed to launch application: {e}")
     
