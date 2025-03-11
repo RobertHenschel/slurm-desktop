@@ -17,7 +17,8 @@ Linux desktop application to interface with SLURM
 - Show users currently in queue jobs per partition, also via double clicking the partition.
   - Allow to cancel a running/pending job via the context menu on the job row in the table.
   - Show stdout and stderr output of a running job, via context menu on the job row in the table.
-- Show a green "play" icon on top of the partition if the user has a job in the queue.
+- Show a green "play" icon on top of the partition if the user has a running job in the queue.
+- Show a yellow "pause" icon on top of the partition if the user has a pending/waiting job in the queue.
 - Drag and Drop an *.sh file onto any partition to run it with sbatch.
   - If the file contains "#SBATCH" commands, it is just run, but the partition is overwritten by command line arguemnt.
   - If the file doesn't contain any "#SBATCH" commands, the user can specify them before the script is run.
