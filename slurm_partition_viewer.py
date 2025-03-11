@@ -105,6 +105,9 @@ class TimeSelectionDialog(QDialog):
         self.max_memory = self.get_max_memory_per_node(partition_name)
         self.gpu_info = self.get_gpu_info(partition_name)
         
+        # Get available projects/allocations
+        self.available_projects = self.get_available_projects()
+        
         # Determine granularity based on max walltime
         self.use_minutes = self.max_hours <= 4
         
@@ -328,7 +331,22 @@ class TimeSelectionDialog(QDialog):
             
             layout.addWidget(gpu_group)
         
-        # Add buttons
+        # Add Project/Allocation selection
+        project_group = QGroupBox("Project Allocation")
+        project_layout = QVBoxLayout(project_group)
+        
+        project_label = QLabel("Select project allocation:")
+        project_layout.addWidget(project_label)
+        
+        self.project_combo = QComboBox()
+        self.project_combo.addItems(self.available_projects)
+        if self.available_projects:
+            self.project_combo.setCurrentIndex(0)
+        project_layout.addWidget(self.project_combo)
+        
+        layout.addWidget(project_group)
+        
+        # Add dialog buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -546,6 +564,49 @@ class TimeSelectionDialog(QDialog):
         if hasattr(self, 'gpu_spinbox'):
             return self.gpu_spinbox.value()
         return None
+
+    def get_available_projects(self):
+        """Get the list of available project allocations for the current user."""
+        try:
+            # Get current username
+            username = os.environ.get('USER') or os.environ.get('USERNAME')
+            if not username:
+                try:
+                    import pwd
+                    username = pwd.getpwuid(os.getuid()).pw_name
+                except (ImportError, AttributeError):
+                    print("Could not determine username")
+                    return ["staff"]  # Default to staff if we can't get username
+            
+            # Run sacctmgr to get user's associations
+            result = subprocess.run(
+                ['sacctmgr', 'show', 'associations', 'user=' + username, '--noheader', '--parsable2'],
+                capture_output=True, text=True
+            )
+            
+            # Parse the output to extract account/project names
+            projects = []
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    fields = line.split('|')
+                    if len(fields) > 1:
+                        account = fields[1]  # Account/project is typically the second field
+                        if account and account not in projects:
+                            projects.append(account)
+            
+            # If no projects found, add a default
+            if not projects:
+                projects = ["staff"]
+            
+            return projects
+            
+        except Exception as e:
+            print(f"Error getting available projects: {e}")
+            return ["staff"]  # Default to staff if there's an error
+
+    def get_selected_project(self):
+        """Get the project allocation selected by the user."""
+        return self.project_combo.currentText()
 
 class FileViewerWindow(QMainWindow):
     """Window for viewing job output/error files with tail -f functionality."""
@@ -1306,11 +1367,24 @@ class PartitionIcon(QFrame):
             memory = dialog.get_selected_memory()
             nodes = dialog.get_selected_nodes()
             project = dialog.get_selected_project()
+            gpus = dialog.get_selected_gpus()
+            
+            # Check if this is a GPU partition
+            gpu_info = dialog.get_gpu_info(self.partition_name)
+            if gpu_info and (gpus is None or gpus == 0):
+                # This is a GPU partition but no GPUs were requested
+                QMessageBox.warning(
+                    self,
+                    "GPU Required",
+                    f"The partition '{self.partition_name}' has {gpu_info['type']} GPUs available, "
+                    f"but no GPUs were requested. Please select at least 1 GPU for this partition."
+                )
+                return  # Don't submit the job
             
             # Submit the job with the selected parameters
-            self.submit_batch_job_with_params(script_path, time_limit, cpus_per_task, memory, nodes, project)
+            self.submit_batch_job_with_params(script_path, time_limit, cpus_per_task, memory, nodes, project, gpus)
 
-    def submit_batch_job_with_params(self, script_path, time_limit, cpus_per_task, memory, nodes, project):
+    def submit_batch_job_with_params(self, script_path, time_limit, cpus_per_task, memory, nodes, project, gpus=None):
         """Submit a batch job with specified parameters."""
         try:
             # Construct the sbatch command with parameters
@@ -1322,8 +1396,14 @@ class PartitionIcon(QFrame):
                 "--cpus-per-task", str(cpus_per_task),
                 "--mem", f"{memory}G",
                 "--time", time_limit,
-                script_path
             ]
+            
+            # Add GPU settings if requested
+            if gpus:
+                command.append(f"--gres=gpu:{gpus}")
+                
+            # Add the script path
+            command.append(script_path)
             
             # Run the sbatch command
             result = subprocess.run(command, capture_output=True, text=True)
@@ -1514,10 +1594,19 @@ class PartitionIcon(QFrame):
                 cpus_per_task = dialog.get_selected_cpus()
                 memory = dialog.get_selected_memory()
                 gpus = dialog.get_selected_gpus()
+                project = dialog.get_selected_project()
                 
-                # Generate a unique job name with timestamp
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                job_name = f"{app_name}_{timestamp}"
+                # Check if this is a GPU partition
+                gpu_info = dialog.get_gpu_info(self.partition_name)
+                if gpu_info and (gpus is None or gpus == 0):
+                    # This is a GPU partition but no GPUs were requested
+                    QMessageBox.warning(
+                        self,
+                        "GPU Required",
+                        f"The partition '{self.partition_name}' has {gpu_info['type']} GPUs available, "
+                        f"but no GPUs were requested. Please select at least 1 GPU for this partition."
+                    )
+                    return  # Don't submit the job
                 
                 # Construct the srun command
                 srun_cmd = [
@@ -1527,8 +1616,7 @@ class PartitionIcon(QFrame):
                     "--cpus-per-task=" + str(cpus_per_task),
                     "--mem=" + str(memory) + "G",
                     "--nodes=1",
-                    "--account=staff",
-                    "--job-name=" + job_name,
+                    "--account=" + project,
                     "--x11",
                     "--pty",
                 ]
@@ -1555,12 +1643,13 @@ class PartitionIcon(QFrame):
                 dialog.get_selected_time(),
                 dialog.get_selected_cpus(),
                 dialog.get_selected_memory(),
-                dialog.get_selected_gpus()
+                dialog.get_selected_gpus(),
+                dialog.get_selected_project()
             )
     
-    def start_interactive_job(self, time_limit="4:00:00", cpus_per_task=8, memory=32, gpus=None):
+    def start_interactive_job(self, time_limit="4:00:00", cpus_per_task=8, memory=32, gpus=None, project="staff"):
         # Construct the srun command
-        command = (f"srun -p {self.partition_name} -N 1 -A staff --cpus-per-task={cpus_per_task} "
+        command = (f"srun -p {self.partition_name} -N 1 -A {project} --cpus-per-task={cpus_per_task} "
                   f"--mem={memory}G --time={time_limit} --job-name=RED_Interactive_{self.partition_name} ")
         
         # Add GPU settings if requested
@@ -1735,6 +1824,7 @@ class BatchJobDialog(QDialog):
         self.max_cpus = self.get_max_cpus_per_node(partition_name)
         self.max_memory = self.get_max_memory_per_node(partition_name)
         self.max_nodes = self.get_max_nodes(partition_name)
+        self.gpu_info = self.get_gpu_info(partition_name)
         
         # Get available projects
         self.available_projects = self.get_available_projects()
@@ -1958,6 +2048,47 @@ class BatchJobDialog(QDialog):
         memory_layout.addWidget(max_memory_label)
         
         layout.addWidget(memory_group)
+        
+        # Add GPU selection if GPUs are available
+        if self.gpu_info:
+            gpu_group = QGroupBox(f"GPUs ({self.gpu_info['type']})")
+            gpu_layout = QVBoxLayout(gpu_group)
+            
+            # GPU slider
+            gpu_slider_layout = QHBoxLayout()
+            gpu_label = QLabel("Number of GPUs:")
+            self.gpu_slider = QSlider(Qt.Horizontal)
+            self.gpu_slider.setMinimum(1)
+            self.gpu_slider.setMaximum(self.gpu_info['count'])
+            self.gpu_slider.setValue(1)  # Default to 1 GPU
+            self.gpu_slider.setTickPosition(QSlider.TicksBelow)
+            self.gpu_slider.setTickInterval(1)
+            
+            gpu_slider_layout.addWidget(gpu_label)
+            gpu_slider_layout.addWidget(self.gpu_slider)
+            gpu_layout.addLayout(gpu_slider_layout)
+            
+            # GPU spinbox
+            gpu_spinbox_layout = QHBoxLayout()
+            self.gpu_spinbox = QSpinBox()
+            self.gpu_spinbox.setMinimum(1)
+            self.gpu_spinbox.setMaximum(self.gpu_info['count'])
+            self.gpu_spinbox.setValue(1)  # Default to 1 GPU
+            
+            gpu_spinbox_layout.addWidget(self.gpu_spinbox)
+            gpu_spinbox_layout.addWidget(QLabel("GPUs"))
+            gpu_spinbox_layout.addStretch()
+            gpu_layout.addLayout(gpu_spinbox_layout)
+            
+            # Connect GPU slider and spinbox
+            self.gpu_slider.valueChanged.connect(self.gpu_spinbox.setValue)
+            self.gpu_spinbox.valueChanged.connect(self.gpu_slider.setValue)
+            
+            # Add max GPU info
+            max_gpu_label = QLabel(f"Maximum GPUs per node: {self.gpu_info['count']}")
+            gpu_layout.addWidget(max_gpu_label)
+            
+            layout.addWidget(gpu_group)
         
         # Add Project selection
         project_group = QGroupBox("Project Allocation")
@@ -2252,6 +2383,40 @@ class BatchJobDialog(QDialog):
     
     def get_selected_project(self):
         return self.project_combo.currentText()
+
+    def get_gpu_info(self, partition_name):
+        """Get GPU information for the partition."""
+        try:
+            # Get GRES (Generic Resource) info for the partition
+            result = subprocess.run(
+                ['sinfo', '-p', partition_name, '--format=%G', '-h'],
+                capture_output=True, text=True
+            )
+            gres_info = result.stdout.strip()
+            
+            # Check if there are GPUs
+            if gres_info == '(null)' or not gres_info:
+                return None
+            
+            # Parse GPU information (format: gpu:type:count)
+            gpu_match = re.match(r'gpu:([^:]+):(\d+)', gres_info)
+            if gpu_match:
+                return {
+                    'type': gpu_match.group(1).upper(),  # e.g., 'V100', 'H100'
+                    'count': int(gpu_match.group(2))
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error getting GPU information: {e}")
+            return None
+            
+    def get_selected_gpus(self):
+        """Get the number of GPUs selected by the user."""
+        if hasattr(self, 'gpu_spinbox'):
+            return self.gpu_spinbox.value()
+        return None
 
 class MainWindow(QMainWindow):
     def __init__(self):

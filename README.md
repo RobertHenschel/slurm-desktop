@@ -25,3 +25,5 @@ Linux desktop application to interface with SLURM
 - If MATE menu was parsed, show all applications from the menu in the context menu of every partition.
   - Selecting the app will run it in the partition.
 - Show upcoming maintenance reservation in status bar of main window.
+- A user can and needs to pick an "account" for every job that is run.
+- When running in a partition that has GPUs, it is enforced that you request at least one GPU.
