@@ -1481,6 +1481,10 @@ class PartitionIcon(QFrame):
                 memory = dialog.get_selected_memory()
                 gpus = dialog.get_selected_gpus()
                 
+                # Generate a unique job name with timestamp
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                job_name = f"{app_name}_{timestamp}"
+                
                 # Construct the srun command
                 srun_cmd = [
                     "srun",
@@ -1490,6 +1494,7 @@ class PartitionIcon(QFrame):
                     "--mem=" + str(memory) + "G",
                     "--nodes=1",
                     "--account=staff",
+                    "--job-name=" + job_name,
                     "--x11",
                     "--pty",
                 ]
