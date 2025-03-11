@@ -46,27 +46,50 @@ class JobStatusBadge(QLabel):
         self.setAlignment(Qt.AlignCenter)
         # Make the label transparent
         self.setAttribute(Qt.WA_TranslucentBackground)
+        # Default to running state
+        self.job_state = "RUNNING"
+        
+    def set_state(self, state):
+        """Set the badge state to either RUNNING or PENDING."""
+        self.job_state = state
+        self.update()  # Trigger repaint
         
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw green circle
-        painter.setPen(QPen(QColor("#1e8449"), 1))
-        painter.setBrush(QBrush(QColor("#2ecc71")))
-        painter.drawEllipse(2, 2, 20, 20)
-        
-        # Draw play triangle
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(QColor("white")))
-        
-        # Create a triangle (play symbol)
-        triangle = QPolygon()
-        triangle.append(QPoint(8, 6))    # Left point
-        triangle.append(QPoint(18, 12))  # Right point
-        triangle.append(QPoint(8, 18))   # Bottom point
-        
-        painter.drawPolygon(triangle)
+        if self.job_state == "RUNNING":
+            # Draw green circle for running jobs
+            painter.setPen(QPen(QColor("#1e8449"), 1))
+            painter.setBrush(QBrush(QColor("#2ecc71")))
+            painter.drawEllipse(2, 2, 20, 20)
+            
+            # Draw play triangle
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor("white")))
+            
+            # Create a triangle (play symbol)
+            triangle = QPolygon()
+            triangle.append(QPoint(8, 6))    # Left point
+            triangle.append(QPoint(18, 12))  # Right point
+            triangle.append(QPoint(8, 18))   # Bottom point
+            
+            painter.drawPolygon(triangle)
+        else:  # PENDING
+            # Draw yellow circle for pending jobs
+            painter.setPen(QPen(QColor("#d4ac0d"), 1))
+            painter.setBrush(QBrush(QColor("#f1c40f")))
+            painter.drawEllipse(2, 2, 20, 20)
+            
+            # Draw pause symbol (two vertical bars)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor("white")))
+            
+            # Left bar
+            painter.drawRect(7, 6, 4, 12)
+            # Right bar
+            painter.drawRect(13, 6, 4, 12)
+            
         painter.end()
 
 class TimeSelectionDialog(QDialog):
@@ -1066,6 +1089,7 @@ class PartitionIcon(QFrame):
         
         # Flag to track if user has jobs in this partition
         self.has_active_jobs = False
+        self.has_pending_jobs = False
         
         # Create layout for the label
         layout = QVBoxLayout(self)
@@ -1185,11 +1209,21 @@ class PartitionIcon(QFrame):
         # Enable mouse tracking for double-click
         self.setMouseTracking(True)
     
-    def update_job_status(self, has_jobs):
-        """Update the job status badge visibility based on whether the user has jobs in this partition."""
-        if has_jobs != self.has_active_jobs:
-            self.has_active_jobs = has_jobs
-            self.job_badge.setVisible(has_jobs)
+    def update_job_status(self, has_running_jobs, has_pending_jobs):
+        """Update the job status badge visibility and state based on user's jobs in this partition."""
+        # Update state flags
+        self.has_active_jobs = has_running_jobs or has_pending_jobs
+        self.has_pending_jobs = has_pending_jobs
+        
+        # Update badge visibility
+        self.job_badge.setVisible(self.has_active_jobs)
+        
+        # Update badge state if visible
+        if self.has_active_jobs:
+            if has_running_jobs:
+                self.job_badge.set_state("RUNNING")
+            else:  # Only pending jobs
+                self.job_badge.set_state("PENDING")
     
     def dragEnterEvent(self, event):
         # Check if the drag contains URLs (files)
@@ -2430,23 +2464,37 @@ class MainWindow(QMainWindow):
                     print("Could not determine username")
                     return
             
-            # Run squeue command to get user's jobs
+            # Run squeue command to get user's jobs with state information
             result = subprocess.run(
-                ['squeue', '-u', username, '-h', '-o', '%P'],
+                ['squeue', '-u', username, '-h', '-o', '%P %T'],
                 capture_output=True, text=True
             )
             
-            # Get list of partitions where the user has jobs
-            active_partitions = set(result.stdout.strip().split('\n'))
-            if '' in active_partitions:  # Remove empty string if present
-                active_partitions.remove('')
+            # Parse the output to get partitions with running and pending jobs
+            running_partitions = set()
+            pending_partitions = set()
+            
+            for line in result.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 2:
+                    partition = parts[0]
+                    state = parts[1]
+                    
+                    if state == "RUNNING":
+                        running_partitions.add(partition)
+                    elif state in ["PENDING", "CONFIGURING", "COMPLETING"]:
+                        pending_partitions.add(partition)
             
             # Update each partition icon
             for display_name, icon in self.partition_icons.items():
                 # Use the clean partition name (without asterisk)
                 partition_name = icon.partition_name
-                has_jobs = partition_name in active_partitions
-                icon.update_job_status(has_jobs)
+                has_running = partition_name in running_partitions
+                has_pending = partition_name in pending_partitions and not has_running
+                icon.update_job_status(has_running, has_pending)
             
         except Exception as e:
             print(f"Error updating job statuses: {e}")
@@ -2457,8 +2505,9 @@ class MainWindow(QMainWindow):
             import random
             for icon in self.partition_icons.values():
                 # 20% chance of having a job in this partition
-                has_jobs = random.random() < 0.2
-                icon.update_job_status(has_jobs)
+                has_running = random.random() < 0.2
+                has_pending = random.random() < 0.2
+                icon.update_job_status(has_running, has_pending)
     
     def show_user_stats(self):
         """Show the user statistics window."""
