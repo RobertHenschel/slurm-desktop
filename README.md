@@ -23,3 +23,4 @@ Linux desktop application to interface with SLURM
   - If the file doesn't contain any "#SBATCH" commands, the user can specify them before the script is run.
 - If MATE menu was parsed, show all applications from the menu in the context menu of every partition.
   - Selecting the app will run it in the partition.
+- Show upcoming maintenance reservation in status bar of main window.

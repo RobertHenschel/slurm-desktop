@@ -10,7 +10,7 @@ import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, # type: ignore
                            QLabel, QGridLayout, QFrame, QStyle, QMenu, QAction,
                            QDialog, QPushButton, QSlider, QSpinBox, QDialogButtonBox, QGroupBox, QMessageBox,
-                           QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit, QComboBox)
+                           QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit, QComboBox, QStatusBar)
 from PyQt5.QtCore import Qt, QSize, QRect, QPoint, QTimer, QSettings, QDateTime, pyqtSignal # type: ignore
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QCursor, QPolygon, QTextCursor # type: ignore
 
@@ -2289,10 +2289,14 @@ class MainWindow(QMainWindow):
         user_button.clicked.connect(self.show_user_stats)  # Add click handler
         
         # Position the help button at the lower right
-        help_button.move(self.width() - 52, self.height() - 52)  # 20px from right, 20px from bottom + button height
+        help_button.move(self.width() - 52, self.height() - 62)  # 20px from right, 30px from bottom + button height
         
         # Position the user button at the top right
         user_button.move(self.width() - 42, 10)  # 10px from right, 10px from top
+        
+        # Create status bar
+        self.statusBar = self.statusBar()
+        self.statusBar.setStyleSheet("QStatusBar { background-color: #f0f0f0; }")
         
         # Dictionary to store partition icons
         self.partition_icons = {}
@@ -2308,8 +2312,16 @@ class MainWindow(QMainWindow):
         self.job_status_timer.timeout.connect(self.update_job_statuses)
         self.job_status_timer.start(10000)  # Poll every 10 seconds
         
+        # Set up timer for checking reservations
+        self.reservation_timer = QTimer(self)
+        self.reservation_timer.timeout.connect(self.check_main_reservations)
+        self.reservation_timer.start(60000*60)  # Check every hour
+        
         # Initial job status update
         QTimer.singleShot(1000, self.update_job_statuses)
+        
+        # Initial reservation check
+        QTimer.singleShot(2000, self.check_main_reservations)
         
         # Store button references for resize handling
         self.help_button = help_button
@@ -2319,7 +2331,7 @@ class MainWindow(QMainWindow):
         """Handle window resize to keep buttons in position."""
         super().resizeEvent(event)
         # Update help button position to stay in lower right corner
-        self.help_button.move(self.width() - 52, self.height() - 52)
+        self.help_button.move(self.width() - 52, self.height() - 62)
         # Update user button position to stay in top right corner
         self.user_button.move(self.width() - 42, 10)
     
@@ -2452,6 +2464,121 @@ class MainWindow(QMainWindow):
         """Show the user statistics window."""
         stats_window = UserStatsWindow(self)
         stats_window.exec_()
+
+    def check_main_reservations(self):
+        """Check for upcoming reservations with 'main' in the name and display in status bar."""
+        try:
+            # Get all reservations
+            result = subprocess.run(["scontrol", "show", "reservation", "-o"], capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                print(f"Error getting reservations: {result.stderr}")
+                return
+            
+            # Parse the output
+            reservations = []
+            current_time = datetime.datetime.now()
+            
+            # Split the output by reservation entries
+            reservation_entries = result.stdout.strip().split('\n')
+            
+            for entry in reservation_entries:
+                if not entry.strip():
+                    continue
+                
+                # Extract reservation name
+                name_match = re.search(r'ReservationName=(\S+)', entry)
+                if not name_match:
+                    continue
+                
+                name = name_match.group(1)
+                
+                # Check if 'main' is in the name (case insensitive)
+                if 'main' not in name.lower():
+                    continue
+                
+                # Extract start time
+                start_match = re.search(r'StartTime=(\S+)', entry)
+                if not start_match:
+                    continue
+                
+                start_str = start_match.group(1)
+                
+                try:
+                    # Parse SLURM date format (YYYY-MM-DDTHH:MM:SS)
+                    start_time = datetime.datetime.strptime(start_str, "%Y-%m-%dT%H:%M:%S")
+                    
+                    # Only include future reservations
+                    if start_time > current_time:
+                        # Extract end time
+                        end_match = re.search(r'EndTime=(\S+)', entry)
+                        if not end_match:
+                            continue
+                        
+                        end_str = end_match.group(1)
+                        
+                        try:
+                            end_time = datetime.datetime.strptime(end_str, "%Y-%m-%dT%H:%M:%S")
+                            
+                            # Extract nodes
+                            nodes_match = re.search(r'Nodes=(\S+)', entry)
+                            nodes = nodes_match.group(1) if nodes_match else "Unknown"
+                            
+                            # Extract partitions
+                            partition_match = re.search(r'Partition=(\S+)', entry)
+                            partitions = partition_match.group(1) if partition_match else "Unknown"
+                            
+                            # Add to list
+                            reservations.append({
+                                'name': name,
+                                'start_time': start_time,
+                                'end_time': end_time,
+                                'nodes': nodes,
+                                'partitions': partitions
+                            })
+                        except ValueError:
+                            continue
+                except ValueError:
+                    continue
+            
+            # Sort by start time
+            reservations.sort(key=lambda x: x['start_time'])
+            
+            # Update status bar with the next reservation
+            if reservations:
+                next_res = reservations[0]
+                start_str = next_res['start_time'].strftime("%Y-%m-%d %H:%M")
+                end_str = next_res['end_time'].strftime("%Y-%m-%d %H:%M")
+                
+                # Calculate time until reservation
+                time_until = next_res['start_time'] - current_time
+                days = time_until.days
+                hours, remainder = divmod(time_until.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                
+                if days > 0:
+                    time_str = f"{days}d {hours}h"
+                elif hours > 0:
+                    time_str = f"{hours}h"
+                
+                status_msg = f"Next maintenance starts on {start_str} (in {time_str})"
+                self.statusBar.showMessage(status_msg)
+                
+                # Set status bar color based on proximity
+                if days < 1:  # Less than 1 day away
+                    if hours < 2:  # Less than 2 hours away
+                        self.statusBar.setStyleSheet("QStatusBar { background-color: #ffcccc; color: #990000; font-weight: bold; }")
+                    else:
+                        self.statusBar.setStyleSheet("QStatusBar { background-color: #fff4cc; color: #996600; font-weight: bold; }")
+                else:
+                    self.statusBar.setStyleSheet("QStatusBar { background-color: #f0f0f0; color: #333333; }")
+            else:
+                # No upcoming reservations with 'main' in the name
+                self.statusBar.clearMessage()
+                self.statusBar.setStyleSheet("QStatusBar { background-color: #f0f0f0; }")
+                
+        except Exception as e:
+            print(f"Error checking reservations: {e}")
 
 class UserStatsWindow(QDialog):
     def __init__(self, parent=None):
