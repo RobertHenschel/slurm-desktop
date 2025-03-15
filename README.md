@@ -1,10 +1,8 @@
-# slurm-desktop
+# SLURM Partition Viewer
 Linux desktop application to interface with SLURM,. This is mostly a proof of concept, and really only works on IU's Research Desktop environment. Please reach out if you would like to use this on your HPCDesktop system.
 
 <img src="https://github.com/user-attachments/assets/41f8bed9-133b-4e2a-b2cc-5e9d26cb29f9" alt="My image" width="500" />
 <img src="https://github.com/user-attachments/assets/130006ff-5a5f-4ce7-ac14-cc1e50c3a356" alt="My image" width="200" />
-
-
 
 # menu_parser.py
 - This is not general purpose. It currently only works on IU's RED system.
@@ -30,8 +28,12 @@ Linux desktop application to interface with SLURM,. This is mostly a proof of co
 - When running in a partition that has GPUs, it is enforced that you request at least one GPU.
 
 
-# Simple SLURM Partition Viewer
+# Simple SLURM Viewer
 A lightweight PyQt5 application to display SLURM partitions in a grid.
+
+<img width="400" alt="image" src="https://github.com/user-attachments/assets/5a1e51dd-b34d-4cb0-8b2f-30aa601b7a39" />
+<img width="400" alt="image" src="https://github.com/user-attachments/assets/6769c51f-d0c2-4d32-8210-2560d45c8a57" />
+
 
 ## Features
 - Displays all available SLURM partitions in a grid layout
@@ -40,7 +42,8 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
 - Responsive design with a scrollable grid
 - Error handling for environments without SLURM
 - Application icon
-- Detect and designate default partition
+- Detect and highlight default partition
+- Detect and show GPU partitions
 
 ## Requirements
 - Python 3.6+
