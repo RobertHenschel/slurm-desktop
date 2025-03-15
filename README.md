@@ -28,3 +28,33 @@ Linux desktop application to interface with SLURM,. This is mostly a proof of co
 - Show upcoming maintenance reservation in status bar of main window.
 - A user can and needs to pick an "account" for every job that is run.
 - When running in a partition that has GPUs, it is enforced that you request at least one GPU.
+
+
+# Simple SLURM Partition Viewer
+A lightweight PyQt5 application to display SLURM partitions in a grid.
+
+## Features
+- Displays all available SLURM partitions in a grid layout
+- Shows partition name and node count for each partition
+- Sorts partitions alphabetically
+- Responsive design with a scrollable grid
+- Error handling for environments without SLURM
+
+## Requirements
+- Python 3.6+
+- PyQt5
+- SLURM commands available in PATH
+
+## Installation
+1. Ensure you have Python 3.6 or newer installed
+2. Install PyQt5:
+   ```
+   pip install PyQt5
+   ```
+3. Download `simple_slurm_viewer.py` and icon file `queue.png`
+
+## Usage
+```
+python3 simple_slurm_viewer.py
+```
+The application will open a window displaying all available SLURM partitions in a grid layout.
