@@ -11,7 +11,16 @@ class PartitionIcon(QFrame):
     
     def __init__(self, text, node_count=0, parent=None):
         super().__init__(parent)
-        self.partition_name = text
+        
+        # Check if this is a default partition (ends with *)
+        self.is_default = text.endswith('*')
+        
+        # Remove the asterisk for display purposes
+        if self.is_default:
+            self.partition_name = text[:-1]  # Remove the asterisk
+        else:
+            self.partition_name = text
+            
         self.node_count = node_count
         
         # Set fixed size for the icon
@@ -26,9 +35,17 @@ class PartitionIcon(QFrame):
         layout.setAlignment(Qt.AlignCenter)
         
         # Create label for the partition name
-        self.name_label = QLabel(text)
+        self.name_label = QLabel(self.partition_name)
         self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        
+        # Set special style for default partition
+        if self.is_default:
+            self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2980b9;")
+            # Set special background for default partition
+            self.setStyleSheet("background-color: #d5e8f8; border: 2px solid #2980b9;")
+        else:
+            self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+            self.setStyleSheet("background-color: #f0f0f0;")
         
         # Create label for the icon
         self.icon_label = QLabel()
@@ -50,6 +67,13 @@ class PartitionIcon(QFrame):
         # Create label for node count
         self.node_count_label = QLabel(f"{node_count} nodes")
         self.node_count_label.setAlignment(Qt.AlignCenter)
+        
+        # Create label for default indicator if this is a default partition
+        if self.is_default:
+            default_label = QLabel("DEFAULT")
+            default_label.setAlignment(Qt.AlignCenter)
+            default_label.setStyleSheet("color: #2980b9; font-weight: bold; font-size: 10px;")
+            layout.addWidget(default_label)
         
         # Add widgets to layout
         layout.addWidget(self.icon_label)
@@ -109,6 +133,7 @@ class MainWindow(QMainWindow):
         """Query SLURM for partition information and create icons"""
         try:
             # Run sinfo command to get partition information
+            # Format: partition name, node count - preserve the asterisk for default partitions
             result = subprocess.run(
                 ["sinfo", "--noheader", "--format=%P,%D"],
                 capture_output=True,
@@ -121,13 +146,16 @@ class MainWindow(QMainWindow):
             for line in result.stdout.strip().split('\n'):
                 if line:
                     try:
-                        partition_name, node_count = line.strip().split(',')
-                        partitions.append((partition_name, int(node_count)))
+                        partition_info = line.strip().split(',')
+                        if len(partition_info) >= 2:
+                            partition_name = partition_info[0]
+                            node_count = int(partition_info[1])
+                            partitions.append((partition_name, node_count))
                     except (ValueError, IndexError) as e:
                         print(f"Error parsing partition info: {e} for line: {line}")
             
-            # Sort partitions alphabetically
-            partitions.sort(key=lambda x: x[0])
+            # Sort partitions alphabetically, but put default partitions first
+            partitions.sort(key=lambda x: (not x[0].endswith('*'), x[0].rstrip('*').lower()))
             
             # Create and place partition icons in the grid
             for i, (partition_name, node_count) in enumerate(partitions):

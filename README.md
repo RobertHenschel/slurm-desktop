@@ -39,6 +39,8 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
 - Sorts partitions alphabetically
 - Responsive design with a scrollable grid
 - Error handling for environments without SLURM
+- Application icon
+- Detect and designate default partition
 
 ## Requirements
 - Python 3.6+
