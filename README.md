@@ -34,7 +34,7 @@ python3 simple_slurm_viewer.py
 The application will open a window displaying all available SLURM partitions in a grid layout.
 
 # SLURM Partition Viewer
-This application was developed for IU's Research Desktop and will likely NOT work anywhere else. Linux desktop application to interface with SLURM,. This is mostly a proof of concept, and really only works on IU's Research Desktop environment. Please reach out if you would like to use this on your HPCDesktop system.
+This application was developed for IU's Research Desktop and will likely NOT work anywhere else. This is Linux desktop application to interface with SLURM. Currently this is mostly a proof of concept, and really only works on IU's Research Desktop environment. Please reach out if you would like to use this on your HPCDesktop system.
 
 <img src="https://github.com/user-attachments/assets/41f8bed9-133b-4e2a-b2cc-5e9d26cb29f9" alt="My image" width="500" />
 <img src="https://github.com/user-attachments/assets/130006ff-5a5f-4ce7-ac14-cc1e50c3a356" alt="My image" width="200" />
