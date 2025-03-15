@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QSize, QRect
 class PartitionIcon(QFrame):
     """Simple widget to display a SLURM partition"""
     
-    def __init__(self, text, node_count=0, parent=None):
+    def __init__(self, text, node_count=0, gpu_info=None, parent=None):
         super().__init__(parent)
         
         # Check if this is a default partition (ends with *)
@@ -22,6 +22,7 @@ class PartitionIcon(QFrame):
             self.partition_name = text
             
         self.node_count = node_count
+        self.gpu_info = gpu_info
         
         # Set fixed size for the icon
         self.setFixedSize(140, 140)
@@ -33,19 +34,12 @@ class PartitionIcon(QFrame):
         # Create a layout for this widget
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(4)  # Reduce spacing to fit more information
         
         # Create label for the partition name
         self.name_label = QLabel(self.partition_name)
         self.name_label.setAlignment(Qt.AlignCenter)
-        
-        # Set special style for default partition
-        if self.is_default:
-            self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2980b9;")
-            # Set special background for default partition
-            self.setStyleSheet("background-color: #d5e8f8; border: 2px solid #2980b9;")
-        else:
-            self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-            self.setStyleSheet("background-color: #f0f0f0;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         
         # Create label for the icon
         self.icon_label = QLabel()
@@ -80,8 +74,60 @@ class PartitionIcon(QFrame):
         layout.addWidget(self.name_label)
         layout.addWidget(self.node_count_label)
         
+        # Add GPU information if available
+        if self.gpu_info and len(self.gpu_info) > 0:
+            # Calculate total GPU count
+            total_gpus = sum(count for _, count in self.gpu_info)
+            
+            # Format GPU types in parentheses
+            gpu_types = []
+            for gpu_type, count in self.gpu_info:
+                if count == 1:
+                    gpu_types.append(f"{gpu_type}")
+                else:
+                    gpu_types.append(f"{count} {gpu_type}")
+            
+            gpu_type_text = ", ".join(gpu_types)
+            
+            # Create label for GPU information
+            gpu_label = QLabel(f"{gpu_type_text} per node")
+            gpu_label.setAlignment(Qt.AlignCenter)
+            gpu_label.setStyleSheet("color: #16a085; font-weight: bold; font-size: 11px;")
+            layout.addWidget(gpu_label)
+            
+            # Add a small indicator in the corner showing that this partition has GPUs
+            self.setToolTip(f"This partition has {total_gpus} GPUs: {gpu_type_text}")
+            
+            # If this is a GPU partition, highlight it with a small corner indicator
+            self.has_gpus = True
+        else:
+            self.has_gpus = False
+        
         # Set the background color
         self.setStyleSheet("background-color: #f0f0f0;")
+    
+    def paintEvent(self, event):
+        """Custom paint event to draw GPU indicator if needed"""
+        super().paintEvent(event)
+        
+        # If this partition has GPUs, draw a small GPU indicator in the corner
+        if self.has_gpus:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # Define color for GPU indicator
+            gpu_color = QColor(46, 204, 113)  # Green color
+            
+            # Draw a small triangle in the top-right corner
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(gpu_color))
+            
+            triangle = QRect(self.width() - 25, 0, 25, 17)
+            painter.drawRect(triangle)
+            
+            # Draw a small "GPU" text - moved a bit to the left to fully show the "U"
+            painter.setPen(QPen(Qt.white))
+            painter.drawText(self.width() - 25, 13, "GPU")
 
     def update_node_count(self, count):
         """Update the node count display"""
@@ -150,7 +196,11 @@ class MainWindow(QMainWindow):
                         if len(partition_info) >= 2:
                             partition_name = partition_info[0]
                             node_count = int(partition_info[1])
-                            partitions.append((partition_name, node_count))
+                            
+                            # Get GPU information for this partition
+                            gpu_info = self.get_gpu_info(partition_name.rstrip('*'))
+                            
+                            partitions.append((partition_name, node_count, gpu_info))
                     except (ValueError, IndexError) as e:
                         print(f"Error parsing partition info: {e} for line: {line}")
             
@@ -158,11 +208,17 @@ class MainWindow(QMainWindow):
             partitions.sort(key=lambda x: (not x[0].endswith('*'), x[0].rstrip('*').lower()))
             
             # Create and place partition icons in the grid
-            for i, (partition_name, node_count) in enumerate(partitions):
+            for i, partition_data in enumerate(partitions):
                 row = i // 4  # 4 icons per row
                 col = i % 4
                 
-                partition_icon = PartitionIcon(partition_name, node_count)
+                if len(partition_data) == 3:
+                    partition_name, node_count, gpu_info = partition_data
+                else:
+                    partition_name, node_count = partition_data
+                    gpu_info = None
+                
+                partition_icon = PartitionIcon(partition_name, node_count, gpu_info)
                 self.grid_layout.addWidget(partition_icon, row, col)
             
             # If no partitions were found, show a message
@@ -181,6 +237,61 @@ class MainWindow(QMainWindow):
             message = QLabel(f"Unexpected error: {str(e)}")
             message.setAlignment(Qt.AlignCenter)
             self.grid_layout.addWidget(message, 0, 0)
+    
+    def get_gpu_info(self, partition_name):
+        """Get GPU information for a partition"""
+        try:
+            # Run sinfo to get GRES info (which includes GPU info)
+            result = subprocess.run(
+                ["sinfo", "-p", partition_name, "--noheader", "--format=%G"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Process the output to extract GPU info
+            gres_info = result.stdout.strip()
+            
+            # If we have GPU info, parse it
+            if gres_info and "gpu" in gres_info.lower():
+                # Examples of possible GRES formats:
+                # "gpu:v100:4" - 4 V100 GPUs
+                # "gpu:4" - 4 GPUs of unspecified type
+                # "(null)" - No GPUs
+                
+                try:
+                    # Ignore lines with "(null)" or empty lines
+                    if gres_info == "(null)" or not gres_info:
+                        return None
+                    
+                    # There might be multiple GRES entries, split by comma
+                    gpu_entries = []
+                    for entry in gres_info.split(","):
+                        if "gpu" in entry.lower():
+                            parts = entry.split(":")
+                            
+                            if len(parts) == 3:  # Format: gpu:type:count
+                                gpu_type = parts[1].upper()
+                                gpu_count = int(parts[2])
+                                gpu_entries.append((gpu_type, gpu_count))
+                            elif len(parts) == 2:  # Format: gpu:count
+                                gpu_count = int(parts[1])
+                                gpu_entries.append(("GPU", gpu_count))
+                    
+                    # If we found GPU entries, return them
+                    if gpu_entries:
+                        return gpu_entries
+                except Exception as e:
+                    print(f"Error parsing GPU info for partition {partition_name}: {e}")
+            
+            return None
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error getting GPU info for partition {partition_name}: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error getting GPU info: {e}")
+            return None
 
 def main():
     # Check if SLURM commands are available
