@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QFrame, QLabel,
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QBrush, QPen
 from PyQt5.QtCore import Qt, QSize, QRect
 
+# Import settings
+import settings
+
 class PartitionIcon(QFrame):
     """Simple widget to display a SLURM partition"""
     
@@ -25,7 +28,7 @@ class PartitionIcon(QFrame):
         self.gpu_info = gpu_info
         
         # Set fixed size for the icon
-        self.setFixedSize(140, 140)
+        self.setFixedSize(settings.PARTITION_ICON_SIZE, settings.PARTITION_ICON_SIZE)
         
         # Set style for the frame
         self.setFrameStyle(QFrame.Box | QFrame.Raised)
@@ -46,14 +49,14 @@ class PartitionIcon(QFrame):
         self.icon_label.setAlignment(Qt.AlignCenter)
         
         # Try to load the queue.png icon
-        icon = QIcon("queue.png")
+        icon = QIcon(settings.QUEUE_ICON_PATH)
         pixmap = icon.pixmap(QSize(48, 48))
         
         # Check if the pixmap is valid/non-empty
         if not pixmap.isNull() and pixmap.width() > 0:
             self.icon_label.setPixmap(pixmap)
         else:
-            print("Warning: Could not load queue.png icon: File not found or invalid")
+            print(f"Warning: Could not load icon: {settings.QUEUE_ICON_PATH} - File not found or invalid")
             # Fallback to text if icon can't be loaded
             self.icon_label.setText("🖥️")
             self.icon_label.setStyleSheet("font-size: 32px;")
@@ -64,9 +67,9 @@ class PartitionIcon(QFrame):
         
         # Create label for default indicator if this is a default partition
         if self.is_default:
-            default_label = QLabel("DEFAULT")
+            default_label = QLabel(settings.DEFAULT_PARTITION_LABEL)
             default_label.setAlignment(Qt.AlignCenter)
-            default_label.setStyleSheet("color: #2980b9; font-weight: bold; font-size: 10px;")
+            default_label.setStyleSheet(f"color: {settings.DEFAULT_PARTITION_COLOR}; font-weight: bold; font-size: 10px;")
             layout.addWidget(default_label)
         
         # Add widgets to layout
@@ -92,11 +95,8 @@ class PartitionIcon(QFrame):
             # Create label for GPU information
             gpu_label = QLabel(f"{gpu_type_text} per node")
             gpu_label.setAlignment(Qt.AlignCenter)
-            gpu_label.setStyleSheet("color: #16a085; font-weight: bold; font-size: 11px;")
+            gpu_label.setStyleSheet(f"color: {settings.GPU_INDICATOR_COLOR}; font-weight: bold; font-size: 11px;")
             layout.addWidget(gpu_label)
-            
-            # Add a small indicator in the corner showing that this partition has GPUs
-            self.setToolTip(f"This partition has {total_gpus} GPUs: {gpu_type_text}")
             
             # If this is a GPU partition, highlight it with a small corner indicator
             self.has_gpus = True
@@ -104,8 +104,8 @@ class PartitionIcon(QFrame):
             self.has_gpus = False
         
         # Set the background color
-        self.setStyleSheet("background-color: #f0f0f0;")
-    
+        self.setStyleSheet(f"background-color: {settings.PARTITION_ICON_BACKGROUND};")
+           
     def paintEvent(self, event):
         """Custom paint event to draw GPU indicator if needed"""
         super().paintEvent(event)
@@ -116,7 +116,7 @@ class PartitionIcon(QFrame):
             painter.setRenderHint(QPainter.Antialiasing)
             
             # Define color for GPU indicator
-            gpu_color = QColor(46, 204, 113)  # Green color
+            gpu_color = QColor(settings.GPU_CORNER_COLOR)
             
             # Draw a small triangle in the top-right corner
             painter.setPen(Qt.NoPen)
@@ -127,27 +127,22 @@ class PartitionIcon(QFrame):
             
             # Draw a small "GPU" text - moved a bit to the left to fully show the "U"
             painter.setPen(QPen(Qt.white))
-            painter.drawText(self.width() - 25, 13, "GPU")
-
-    def update_node_count(self, count):
-        """Update the node count display"""
-        self.node_count = count
-        self.node_count_label.setText(f"{count} nodes")
+            painter.drawText(self.width() - 25, 13, settings.GPU_CORNER_TEXT)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
         # Set window properties
-        self.setWindowTitle("SLURM Partitions")
-        self.setMinimumSize(800, 600)
+        self.setWindowTitle(settings.WINDOW_TITLE)
+        self.setMinimumSize(settings.WINDOW_MIN_WIDTH, settings.WINDOW_MIN_HEIGHT)
         
         # Try to set the window icon
-        icon = QIcon("queue.png")
+        icon = QIcon(settings.QUEUE_ICON_PATH)
         if not icon.isNull():
             self.setWindowIcon(icon)
         else:
-            print("Warning: Could not set window icon: File not found or invalid")
+            print(f"Warning: Could not set window icon: {settings.QUEUE_ICON_PATH} - File not found or invalid")
         
         # Create central widget and layout
         central_widget = QWidget()
@@ -162,7 +157,7 @@ class MainWindow(QMainWindow):
         self.grid_layout = QGridLayout(grid_widget)
         
         # Add spacing to the grid
-        self.grid_layout.setSpacing(10)
+        self.grid_layout.setSpacing(settings.GRID_SPACING)
         self.grid_layout.setContentsMargins(10, 10, 10, 10)
         
         # Set the grid widget as the scroll area's widget
@@ -209,8 +204,8 @@ class MainWindow(QMainWindow):
             
             # Create and place partition icons in the grid
             for i, partition_data in enumerate(partitions):
-                row = i // 4  # 4 icons per row
-                col = i % 4
+                row = i // settings.PARTITION_ICON_COLUMNS  # Icons per row based on settings
+                col = i % settings.PARTITION_ICON_COLUMNS
                 
                 if len(partition_data) == 3:
                     partition_name, node_count, gpu_info = partition_data
