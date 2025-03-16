@@ -26,7 +26,7 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
    ```
    pip install PyQt5
    ```
-3. Download `simple_slurm_viewer.py` and icon file `queue.png`
+3. Download `simple_slurm_viewer.py`, `settings.py`, `interactive_job.py` and icon file `queue.png` or clone this whole repo with `git clone https://github.com/RobertHenschel/slurm-desktop.git`
 
 ## Usage
 ```
