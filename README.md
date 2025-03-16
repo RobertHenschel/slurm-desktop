@@ -13,6 +13,7 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
 - Application icon
 - Detect and highlight default partition
 - Detect and show GPU partitions
+- Right click on a partition to start an interactive job (Only works if `mate-terminal` is available)
 
 ## Requirements
 - Python 3.6+
