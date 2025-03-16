@@ -2,12 +2,16 @@
 import sys
 import subprocess
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFrame, QLabel, 
-                            QGridLayout, QVBoxLayout, QScrollArea, QWidget)
+                            QGridLayout, QVBoxLayout, QScrollArea, QWidget,
+                            QMenu, QAction, QMessageBox)
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QBrush, QPen
 from PyQt5.QtCore import Qt, QSize, QRect
 
 # Import settings
 import settings
+
+# Import interactive job functionality
+from interactive_job import InteractiveJobDialog, start_interactive_job
 
 class PartitionIcon(QFrame):
     """Simple widget to display a SLURM partition"""
@@ -105,6 +109,10 @@ class PartitionIcon(QFrame):
         
         # Set the background color
         self.setStyleSheet(f"background-color: {settings.PARTITION_ICON_BACKGROUND};")
+        
+        # Enable context menu
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
            
     def paintEvent(self, event):
         """Custom paint event to draw GPU indicator if needed"""
@@ -128,6 +136,69 @@ class PartitionIcon(QFrame):
             # Draw a small "GPU" text - moved a bit to the left to fully show the "U"
             painter.setPen(QPen(Qt.white))
             painter.drawText(self.width() - 25, 13, settings.GPU_CORNER_TEXT)
+    
+    def show_context_menu(self, position):
+        """Show context menu for this partition"""
+        menu = QMenu(self)
+        
+        # Set stylesheet for menu to change background color of selected items
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #d0d0d0;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                color: black;
+            }
+            QMenu::item:selected {
+                background-color: #2980b9;
+                color: white;
+            }
+        """)
+        
+        # Add interactive job action
+        interactive_action = QAction("Start Interactive Job", self)
+        interactive_action.triggered.connect(self.show_job_dialog)
+        menu.addAction(interactive_action)
+        
+        menu.exec_(self.mapToGlobal(position))
+    
+    def show_job_dialog(self):
+        """Show the interactive job dialog"""
+        # Get original partition name (with asterisk if default)
+        original_name = self.partition_name
+        if self.is_default:
+            original_name += "*"
+            
+        dialog = InteractiveJobDialog(original_name, self)
+        if dialog.exec_():
+            self.start_interactive_job(
+                dialog.get_selected_time(),
+                dialog.get_selected_cpus(),
+                dialog.get_selected_memory(),
+                dialog.get_selected_gpus(),
+                dialog.get_selected_project()
+            )
+    
+    def start_interactive_job(self, time_limit, cpus_per_task, memory, gpus=None, project="staff"):
+        """Start an interactive job on this partition"""
+        # Call the function from the imported module
+        success = start_interactive_job(
+            self.partition_name,
+            time_limit,
+            cpus_per_task,
+            memory,
+            gpus,
+            project
+        )
+        
+        if not success:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to start interactive job on {self.partition_name}. Check terminal for details."
+            )
 
 class MainWindow(QMainWindow):
     def __init__(self):

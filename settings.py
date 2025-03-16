@@ -25,3 +25,10 @@ GRID_SPACING = 10  # Spacing between grid items
 WINDOW_MIN_WIDTH = 800
 WINDOW_MIN_HEIGHT = 600
 WINDOW_TITLE = "SLURM Partitions"
+
+# Interactive job defaults
+DEFAULT_TIME_LIMIT = "4:00:00"  # Default time limit for interactive jobs
+DEFAULT_CPUS = 4  # Default number of CPUs for interactive jobs
+DEFAULT_MEMORY = 16  # Default memory in GB for interactive jobs
+DEFAULT_PROJECT = "staff"  # Default project for interactive jobs
+TERMINAL_COMMAND = "mate-terminal"  # Terminal command to use for interactive jobs
