@@ -31,4 +31,18 @@ DEFAULT_TIME_LIMIT = "4:00:00"  # Default time limit for interactive jobs
 DEFAULT_CPUS = 4  # Default number of CPUs for interactive jobs
 DEFAULT_MEMORY = 16  # Default memory in GB for interactive jobs
 DEFAULT_PROJECT = "staff"  # Default project for interactive jobs
-TERMINAL_COMMAND = "mate-terminal"  # Terminal command to use for interactive jobs
+
+# Terminal settings for interactive jobs
+#TERMINAL_COMMAND = "mate-terminal"  # Terminal command to use for interactive jobs
+TERMINAL_COMMAND = "xterm"  # Uncomment to use xterm instead of mate-terminal
+
+# Terminal command arguments
+# For mate-terminal
+#TERMINAL_TITLE_ARG = "--title"  # Argument for setting window title
+#TERMINAL_EXEC_ARG = "-e"  # Argument for executing a command
+#TERMINAL_EXEC_WRAPPER = "bash -c '{0}; echo \"Press Enter to close\"; read'"  # Wrapper for the command
+
+# For xterm (uncomment these and comment out the mate-terminal ones to use xterm)
+TERMINAL_TITLE_ARG = "-T"  # Argument for setting window title in xterm
+TERMINAL_EXEC_ARG = "-e"  # Argument for executing a command in xterm
+TERMINAL_EXEC_WRAPPER = "bash -c '{0}; echo \"Press Enter to close\"; read'"  # Same wrapper works for xterm

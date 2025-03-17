@@ -540,8 +540,8 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
     try:
         subprocess.Popen([
             settings.TERMINAL_COMMAND, 
-            "--title", f"Interactive Job - {partition_name}",
-            "-e", f"bash -c '{command}; echo \"Press Enter to close\"; read'"
+            settings.TERMINAL_TITLE_ARG, f"Interactive Job - {partition_name}",
+            settings.TERMINAL_EXEC_ARG, settings.TERMINAL_EXEC_WRAPPER.format(command)
         ])
         print(f"Started interactive job on partition {partition_name} with time limit {time_limit}")
         return True
