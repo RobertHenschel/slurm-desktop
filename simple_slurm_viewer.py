@@ -195,6 +195,15 @@ class PartitionIcon(QFrame):
                                 else:
                                     app_action = QAction(app_name, self)
                                 
+                                # Store the exec command in the action's data
+                                app_exec = app.get('exec', '')
+                                app_action.setData(app_exec)
+                                # Connect action to launch method
+                                app_action.triggered.connect(
+                                    lambda checked, app_name=app_name, app_exec=app_exec: 
+                                    self.show_app_job_dialog(app_name, app_exec)
+                                )
+                                
                                 category_menu.addAction(app_action)
                         
                         # Only add the category menu if it has any actions
@@ -229,6 +238,25 @@ class PartitionIcon(QFrame):
                 dialog.get_selected_project()
             )
     
+    def show_app_job_dialog(self, app_name, app_exec):
+        """Show the interactive job dialog for running an application"""
+        # Get original partition name (with asterisk if default)
+        original_name = self.partition_name
+        if self.is_default:
+            original_name += "*"
+            
+        # Create a dialog with the application name in the title
+        dialog = InteractiveJobDialog(original_name, self, app_title=f"Run {app_name}")
+        if dialog.exec_():
+            self.start_interactive_job_with_app(
+                dialog.get_selected_time(),
+                dialog.get_selected_cpus(),
+                dialog.get_selected_memory(),
+                dialog.get_selected_gpus(),
+                dialog.get_selected_project(),
+                app_exec
+            )
+    
     def start_interactive_job(self, time_limit, cpus_per_task, memory, gpus=None, project="staff"):
         """Start an interactive job on this partition"""
         # Call the function from the imported module
@@ -239,6 +267,26 @@ class PartitionIcon(QFrame):
             memory,
             gpus,
             project
+        )
+        
+        if not success:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to start interactive job on {self.partition_name}. Check terminal for details."
+            )
+    
+    def start_interactive_job_with_app(self, time_limit, cpus_per_task, memory, gpus=None, project="staff", app_command=None):
+        """Start an interactive job on this partition with an application"""
+        # Call the function from the imported module
+        success = start_interactive_job(
+            self.partition_name,
+            time_limit,
+            cpus_per_task,
+            memory,
+            gpus,
+            project,
+            app_command
         )
         
         if not success:

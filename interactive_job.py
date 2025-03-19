@@ -15,13 +15,16 @@ import settings
 class InteractiveJobDialog(QDialog):
     """Dialog for setting up an interactive SLURM job"""
     
-    def __init__(self, partition_name, parent=None):
+    def __init__(self, partition_name, parent=None, app_title=None):
         super().__init__(parent)
         
         self.partition_name = partition_name
         
         # Set dialog properties
-        self.setWindowTitle(f"Interactive Job - {partition_name}")
+        if app_title:
+            self.setWindowTitle(f"{app_title} - {partition_name}")
+        else:
+            self.setWindowTitle(f"Interactive Job - {partition_name}")
         self.setMinimumWidth(400)
         
         # Create the form layout
@@ -523,7 +526,8 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
                           cpus_per_task=settings.DEFAULT_CPUS, 
                           memory=settings.DEFAULT_MEMORY, 
                           gpus=None, 
-                          project=settings.DEFAULT_PROJECT):
+                          project=settings.DEFAULT_PROJECT,
+                          app_command=None):
     """Start an interactive job with the specified parameters"""
     # Construct the srun command
     command = (f"srun -p {partition_name} -N 1 -A {project} --cpus-per-task={cpus_per_task} "
@@ -534,7 +538,12 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
         command += f"--gres=gpu:{gpus} "
     
     # Add terminal settings
-    command += "--x11 --pty bash"
+    if app_command:
+        # If an application command is provided, run it inside the interactive job
+        command += f"--x11 --pty {app_command}"
+    else:
+        # Otherwise, just start a bash shell
+        command += "--x11 --pty bash"
     
     # Launch terminal with the command
     try:

@@ -8,7 +8,7 @@
     },
     {
       "name": "MATLAB",
-      "exec": "mate-terminal -e \"bash -i /N/soft/rhel8/red/bin/MATLAB.sh\"",
+      "exec": "bash -i /N/soft/rhel8/red/bin/MATLAB.sh",
       "icon": "/N/soft/rhel8/red/icons/matlab.gif",
       "enabled": true
     }
