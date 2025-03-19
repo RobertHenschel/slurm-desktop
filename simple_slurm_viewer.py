@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import sys
 import subprocess
+import json
+import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFrame, QLabel, 
                             QGridLayout, QVBoxLayout, QScrollArea, QWidget,
                             QMenu, QAction, QMessageBox)
@@ -161,6 +163,52 @@ class PartitionIcon(QFrame):
         interactive_action = QAction("Start Interactive Job", self)
         interactive_action.triggered.connect(self.show_job_dialog)
         menu.addAction(interactive_action)
+        
+        # Add run application submenu
+        app_menu = QMenu("Run Application", self)
+        # Apply same stylesheet to application menu
+        app_menu.setStyleSheet(menu.styleSheet())
+        
+        # Try to load applications from app_menu.json
+        try:
+            if os.path.exists(settings.APP_MENU_JSON):
+                with open(settings.APP_MENU_JSON, 'r') as f:
+                    app_data = json.load(f)
+                    
+                    # Create a submenu for each category
+                    for category, apps in app_data.items():
+                        category_menu = QMenu(category, app_menu)
+                        # Apply same stylesheet to category menu
+                        category_menu.setStyleSheet(menu.styleSheet())
+                        
+                        # Add enabled applications to the category menu
+                        for app in apps:
+                            # Only add if 'enabled' is true (default to not enabled)
+                            if app.get('enabled', False):
+                                app_name = app.get('name', 'Unknown')
+                                app_icon_path = app.get('icon', '')
+                                
+                                # Try to load icon if available
+                                if app_icon_path and os.path.exists(app_icon_path):
+                                    icon = QIcon(app_icon_path)
+                                    app_action = QAction(icon, app_name, self)
+                                else:
+                                    app_action = QAction(app_name, self)
+                                
+                                category_menu.addAction(app_action)
+                        
+                        # Only add the category menu if it has any actions
+                        if not category_menu.isEmpty():
+                            app_menu.addMenu(category_menu)
+        except Exception as e:
+            print(f"Error loading application menu: {e}")
+            # Add a placeholder action when loading fails
+            error_action = QAction("Error loading applications", self)
+            error_action.setEnabled(False)
+            app_menu.addAction(error_action)
+        
+        # Add the application menu to the main menu
+        menu.addMenu(app_menu)
         
         menu.exec_(self.mapToGlobal(position))
     

@@ -26,6 +26,9 @@ WINDOW_MIN_WIDTH = 800
 WINDOW_MIN_HEIGHT = 600
 WINDOW_TITLE = "SLURM Partitions"
 
+# File settings
+APP_MENU_JSON = "app_menu.json"  # Path to the application menu JSON file
+
 # Interactive job defaults
 DEFAULT_TIME_LIMIT = "4:00:00"  # Default time limit for interactive jobs
 DEFAULT_CPUS = 4  # Default number of CPUs for interactive jobs
