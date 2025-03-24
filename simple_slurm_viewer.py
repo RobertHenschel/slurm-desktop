@@ -259,6 +259,10 @@ class PartitionIcon(QFrame):
     
     def start_interactive_job(self, time_limit, cpus_per_task, memory, gpus=None, project="staff"):
         """Start an interactive job on this partition"""
+        # Get main window position
+        main_window = self.window()
+        window_pos = main_window.pos()
+        
         # Call the function from the imported module
         success = start_interactive_job(
             self.partition_name,
@@ -266,7 +270,9 @@ class PartitionIcon(QFrame):
             cpus_per_task,
             memory,
             gpus,
-            project
+            project,
+            window_x=window_pos.x(),
+            window_y=window_pos.y()
         )
         
         if not success:
@@ -278,6 +284,10 @@ class PartitionIcon(QFrame):
     
     def start_interactive_job_with_app(self, time_limit, cpus_per_task, memory, gpus=None, project="staff", app_command=None):
         """Start an interactive job on this partition with an application"""
+        # Get main window position
+        main_window = self.window()
+        window_pos = main_window.pos()
+        
         # Call the function from the imported module
         success = start_interactive_job(
             self.partition_name,
@@ -286,7 +296,9 @@ class PartitionIcon(QFrame):
             memory,
             gpus,
             project,
-            app_command
+            app_command,
+            window_x=window_pos.x(),
+            window_y=window_pos.y()
         )
         
         if not success:

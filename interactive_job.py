@@ -527,7 +527,9 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
                           memory=settings.DEFAULT_MEMORY, 
                           gpus=None, 
                           project=settings.DEFAULT_PROJECT,
-                          app_command=None):
+                          app_command=None,
+                          window_x=None,
+                          window_y=None):
     """Start an interactive job with the specified parameters"""
     # Construct the srun command
     command = (f"srun -p {partition_name} -N 1 -A {project} --cpus-per-task={cpus_per_task} "
@@ -547,11 +549,23 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
     
     # Launch terminal with the command
     try:
-        subprocess.Popen([
+        terminal_args = [
             settings.TERMINAL_COMMAND, 
             settings.TERMINAL_TITLE_ARG, f"Interactive Job - {partition_name}",
             settings.TERMINAL_EXEC_ARG, settings.TERMINAL_EXEC_WRAPPER.format(command)
-        ])
+        ]
+        
+        # Add geometry/position if provided
+        if window_x is not None and window_y is not None:
+            # For mate-terminal, use --geometry with position
+            if settings.TERMINAL_COMMAND == "mate-terminal":
+                terminal_args.insert(1, f"--geometry=+{window_x}+{window_y}")
+            # For xterm, use -geometry
+            elif settings.TERMINAL_COMMAND == "xterm":
+                terminal_args.insert(1, f"-geometry")
+                terminal_args.insert(2, f"+{window_x}+{window_y}")
+                
+        subprocess.Popen(terminal_args)
         print(f"Started interactive job on partition {partition_name} with time limit {time_limit}")
         return True
     except Exception as e:
