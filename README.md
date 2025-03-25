@@ -12,8 +12,10 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
 - Error handling for environments without SLURM
 - Application icon
 - Detect and highlight default partition
-- Detect and show GPU partitions
-- Right click on a partition to start an interactive job (Only works if `mate-terminal` is available - [Issue](https://github.com/RobertHenschel/slurm-desktop/issues/4))
+- Detect and show partitions with GPUs
+- Right click on a partition to start an interactive job (works with `mate-terminal` and `xterm`)
+- Right click on a partition to start a grpahical application in a job
+  - Uses [app_menu.json](app_menu.json) to define the menu structure and startup script
 
 ## Requirements
 - Python 3.6+
@@ -26,7 +28,7 @@ A lightweight PyQt5 application to display SLURM partitions in a grid.
    ```
    pip install PyQt5
    ```
-3. Download `simple_slurm_viewer.py`, `settings.py`, `interactive_job.py` and icon file `queue.png` or clone this whole repo with `git clone https://github.com/RobertHenschel/slurm-desktop.git`
+3. Clone this whole repo with `git clone https://github.com/RobertHenschel/slurm-desktop.git`
 
 ## Usage
 ```
