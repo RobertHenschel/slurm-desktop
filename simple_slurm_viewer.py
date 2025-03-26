@@ -21,6 +21,9 @@ class PartitionIcon(QFrame):
     def __init__(self, text, node_count=0, gpu_info=None, parent=None):
         super().__init__(parent)
         
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+        
         # Check if this is a default partition (ends with *)
         self.is_default = text.endswith('*')
         
@@ -306,6 +309,78 @@ class PartitionIcon(QFrame):
                 self,
                 "Error",
                 f"Failed to start interactive job on {self.partition_name}. Check terminal for details."
+            )
+
+    def dragEnterEvent(self, event):
+        """Handle drag enter events"""
+        if event.mimeData().hasUrls():
+            # Check if the file is a shell script
+            file_path = event.mimeData().urls()[0].toLocalFile()
+            if file_path.endswith('.sh'):
+                # Change background color to light blue to indicate drop target
+                self.setStyleSheet(f"background-color: #225870;")
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+    
+    def dragLeaveEvent(self, event):
+        """Handle drag leave events"""
+        # Restore original background color
+        self.setStyleSheet(f"background-color: {settings.PARTITION_ICON_BACKGROUND};")
+    
+    def show_script_job_dialog(self, script_path):
+        """Show the interactive job dialog for running a shell script"""
+        # Get original partition name (with asterisk if default)
+        original_name = self.partition_name
+        if self.is_default:
+            original_name += "*"
+            
+        # Get script name for the dialog title
+        script_name = os.path.basename(script_path)
+            
+        # Create a dialog with the script name in the title
+        dialog = InteractiveJobDialog(original_name, self, app_title=f"Run {script_name}")
+        if dialog.exec_():
+            self.start_interactive_job_with_app(
+                dialog.get_selected_time(),
+                dialog.get_selected_cpus(),
+                dialog.get_selected_memory(),
+                dialog.get_selected_gpus(),
+                dialog.get_selected_project(),
+                f"bash {script_path}"
+            )
+    
+    def dropEvent(self, event):
+        """Handle drop events"""
+        # Restore original background color
+        self.setStyleSheet(f"background-color: {settings.PARTITION_ICON_BACKGROUND};")
+        
+        file_path = event.mimeData().urls()[0].toLocalFile()
+        
+        # Check if file contains SBATCH directives
+        try:
+            with open(file_path, 'r') as f:
+                has_sbatch = any(line.strip().startswith('#SBATCH') for line in f)
+            
+            if has_sbatch:
+                QMessageBox.warning(
+                    self,
+                    "Cannot Run Script",
+                    "This script contains SLURM job control parameters (#SBATCH directives).\n"
+                    "For now, please submit it using 'sbatch'. Support will be added in later versions."
+                )
+                return
+            
+            # If no SBATCH directives, show interactive job dialog for the script
+            self.show_script_job_dialog(file_path)
+            
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to process script: {str(e)}"
             )
 
 class MainWindow(QMainWindow):

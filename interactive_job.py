@@ -560,10 +560,23 @@ def start_interactive_job(partition_name, time_limit=settings.DEFAULT_TIME_LIMIT
             # For mate-terminal, use --geometry with position
             if settings.TERMINAL_COMMAND == "mate-terminal":
                 terminal_args.insert(1, f"--geometry=+{window_x}+{window_y}")
+                # If we have an app_command, set the working directory to the script's location
+                if app_command:
+                    script_dir = os.path.dirname(app_command.split()[-1])
+                    if script_dir:
+                        terminal_args.insert(1, f"--working-directory={script_dir}")
             # For xterm, use -geometry
             elif settings.TERMINAL_COMMAND == "xterm":
                 terminal_args.insert(1, f"-geometry")
                 terminal_args.insert(2, f"+{window_x}+{window_y}")
+                # If we have an app_command, set the working directory to the script's location
+                if app_command:
+                    script_dir = os.path.dirname(app_command.split()[-1])
+                    if script_dir:
+                        # Modify the command to change directory first
+                        command = f"cd {script_dir} && {command}"
+                        # Update the terminal exec argument with the modified command
+                        terminal_args[-1] = settings.TERMINAL_EXEC_WRAPPER.format(command)
                 
         subprocess.Popen(terminal_args)
         print(f"Started interactive job on partition {partition_name} with time limit {time_limit}")
